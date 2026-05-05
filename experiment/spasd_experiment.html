@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Semantic Priming Study - Experiment 2</title>
+<style>
+  body { font-family: sans-serif; background:#f5f5f5; margin:0; padding:20px; }
+  .card { background:white; border-radius:8px; padding:20px; max-width:900px; margin:0 auto; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+  h1 { font-size:24px; margin-top:0; }
+  .btn { padding:10px 16px; border:none; border-radius:6px; cursor:pointer; margin-right:8px; }
+  .btn-primary { background:#007acc; color:white; }
+  .btn-primary:disabled { background:#a0aec0; color:#e2e8f0; cursor:not-allowed; }
+  .hidden { display:none; }
+  .progress { height:8px; background:#eee; border-radius:4px; margin:10px 0; overflow:hidden; }
+  .progress > div { height:100%; background:#007acc; width:0; transition:width .2s ease; }
+  .choices { display:flex; gap:14px; margin-top:14px; }
+  .choice-panel {
+    flex:1;
+    padding:18px 14px;
+    border-radius:10px;
+    border:1px solid #ddd;
+    background:#fafafa;
+    text-align:center;
+    user-select:none;
+  }
+  .choice-key {
+    font-size:18px;
+    font-weight:700;
+    color:#475569;
+    letter-spacing:0.08em;
+  }
+  .choice-word {
+    margin-top:10px;
+    font-size:24px;
+    font-weight:700;
+    color:#111827;
+  }
+  #primeDisplay {
+    margin:20px auto 10px;
+    max-width:700px;
+    min-height:90px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    border:2px dashed #cdd7e1;
+    border-radius:12px;
+    background:#fbfdff;
+    padding:24px;
+    font-size:44px;
+    font-weight:700;
+    color:#1f2937;
+  }
+  #feedback {
+    margin-top:12px;
+    min-height:30px;
+    text-align:center;
+    font-size:26px;
+    font-weight:700;
+  }
+  .feedback-correct { color:#15803d; }
+  .feedback-incorrect { color:#b91c1c; }
+</style>
+</head>
+<body>
+
+<div class="card" id="screen-splash">
+  <h1>Welcome to the experiment!</h1>
+  <p>You will be participating in a word selection task. Please advance to the next screen for instructions.</p>
+  <button class="btn btn-primary" id="splashBtn">Continue</button>
+</div>
+
+<div class="card hidden" id="screen-instructions">
+  <h1>Instructions</h1>
+  <div style="max-width:760px; margin:0 auto; text-align:left; font-size:18px; line-height:1.6; color:#1f2937;">
+    <p>In this task, you will be shown two words. The first word will flash on the screen briefly before the second word. You will then decide whether the second word is a real word or a nonword.</p>
+    <p>Use <strong>F</strong> for <strong>Word</strong> and <strong>J</strong> and <strong>Nonword</strong>.</p>
+    <p>You will complete four practice trials, then the main task.</p>
+    <p>Do your best. Answer as quickly and accurately as you can.</p>
+  </div>
+  <br>
+  <button class="btn btn-primary" id="instructionsNextBtn">Start Practice</button>
+</div>
+
+<div class="card hidden" id="screen-practice-done">
+  <h1>Practice Complete</h1>
+  <p>You are now ready for the main task.</p>
+  <button class="btn btn-primary" id="startMainBtn">Start Main Task</button>
+</div>
+
+<div class="card hidden" id="screen-trials">
+  <div class="progress"><div id="progressBar"></div></div>
+  <h1 id="trialTitle">Trial</h1>
+  <div id="primeDisplay">Waiting to start...</div>
+  <div class="choices hidden" id="responseChoices" style="margin-top:14px; pointer-events:none;">
+    <div class="choice-panel">
+      <div class="choice-key">F</div>
+      <div class="choice-word">Word</div>
+    </div>
+    <div class="choice-panel">
+      <div class="choice-key">J</div>
+      <div class="choice-word">Nonword</div>
+    </div>
+  </div>
+  <div id="feedback" class="hidden"></div>
+</div>
+
+<div class="card hidden" id="screen-autism-question">
+  <h1>Final Question</h1>
+  <p>Do you identify as Autistic?</p>
+  <p>Press <strong>Y</strong> for <strong>Yes</strong> or <strong>N</strong> for <strong>No</strong>.</p>
+  <div class="choices" style="margin-top:14px; pointer-events:none;">
+    <div class="choice-panel">
+      <div class="choice-key">Y</div>
+      <div class="choice-word">Yes</div>
+    </div>
+    <div class="choice-panel">
+      <div class="choice-key">N</div>
+      <div class="choice-word">No</div>
+    </div>
+  </div>
+</div>
+
+<div class="card hidden" id="screen-finish">
+  <h1>All Done!</h1>
+  <p>Thank you for participating in this study.</p>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzMpqFif7sobrk1C3RnfS0FmxvGXvLTX3-qq9e1IH7SBJSkNDGctH1WPVkNTklfKsl9pA/exec";
+
+const CONFIG = {
+  trialsUrl: "../data/trials.csv",
+  practiceUrl: "../data/priming_practice.csv",
+  fixationMs: 600,
+  wordPrimeDisplayMs: 629,
+  preTargetGapMs: 400,
+  targetReadyDelayMs: 100,
+  feedbackMs: 500,
+};
+
+let MAIN_TRIALS = [];
+let PRACTICE_TRIALS = [];
+
+const State = {
+  participantId: null,
+  phase: "idle", // practice | main
+  trialIndex: 0,
+  activeTrials: [],
+  trialRenderToken: 0,
+  awaitingChoice: false,
+  awaitingAutismResponse: false,
+  targetOnsetTs: null,
+};
+
+const screenTrials = document.getElementById("screen-trials");
+const progressBar = document.getElementById("progressBar");
+const trialTitle = document.getElementById("trialTitle");
+const primeDisplay = document.getElementById("primeDisplay");
+const responseChoices = document.getElementById("responseChoices");
+const feedbackEl = document.getElementById("feedback");
+
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+function nowMs(){ return performance.now(); }
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+function generateParticipantId(){ return String(Math.floor(100000 + Math.random() * 900000)); }
+
+function show(id){ document.getElementById(id).classList.remove("hidden"); }
+function hide(id){ document.getElementById(id).classList.add("hidden"); }
+function currentTrial(){ return State.activeTrials[State.trialIndex]; }
+
+function sendToGoogleSheet(obj){
+  const fd = new FormData();
+  for(const k in obj) fd.append(k, obj[k] ?? "");
+  fetch(SCRIPT_URL, { 
+    method:"POST", 
+    body:fd,
+    mode: 'no-cors'
+  }).then(response => {
+    console.log("Data sent to Google Sheet");
+  }).catch(err => {
+    console.error("Sheet POST error:", err);
+  });
+}
+
+function parseCSVRows(text){
+  const lines = text.trim().split("\n").filter(Boolean);
+  if(lines.length < 2) return { headers: [], rows: [] };
+  const headers = lines[0].split(",").map(h => h.trim());
+  const rows = lines.slice(1).map(line => line.split(",").map(c => c.trim()));
+  return { headers, rows };
+}
+
+function findColumn(headers, candidates){
+  for(const name of candidates){
+    const idx = headers.findIndex(h => h.toLowerCase() === name.toLowerCase());
+    if(idx !== -1) return idx;
+  }
+  return -1;
+}
+
+function parseMainTrials(csvText){
+  const { headers, rows } = parseCSVRows(csvText);
+  const idIdx = findColumn(headers, ["#", "trial", "trial_id"]);
+  const wordIdx = findColumn(headers, ["word_target", "english_target"]);
+  const nonwordIdx = findColumn(headers, ["nonword_target"]);
+  const relSemanticIdx = findColumn(headers, ["related_semantic_prime"]);
+  const relPhonologicalIdx = findColumn(headers, ["related_phonological_prime"]);
+  const unrelIdx = findColumn(headers, ["unrelated_prime", "unrelated_prime_english"]);
+
+  if(wordIdx === -1 || nonwordIdx === -1 || relSemanticIdx === -1 || relPhonologicalIdx === -1 || unrelIdx === -1) return [];
+
+  const out = [];
+  for(let i = 0; i < rows.length; i++){
+    const cells = rows[i];
+    const baseId = idIdx !== -1 ? (cells[idIdx] || String(i+1)) : String(i+1);
+    const wordTarget = cells[wordIdx] || "";
+    const nonwordTarget = cells[nonwordIdx] || "";
+    const relatedSemanticPrime = cells[relSemanticIdx] || "";
+    const relatedPhonologicalPrime = cells[relPhonologicalIdx] || "";
+    const unrelatedPrime = cells[unrelIdx] || "";
+
+    if(!wordTarget) continue;
+
+    // C1: related_semantic_prime + word_target
+    if(relatedSemanticPrime){
+      out.push({
+        trial_id: `${baseId}_C1`,
+        source_row_id: baseId,
+        condition: "C1",
+        prime_text: relatedSemanticPrime,
+        target_word: wordTarget,
+        correct_response: "word",
+        phase: "main",
+      });
+    }
+
+    // C2: related_phonological_prime + word_target
+    if(relatedPhonologicalPrime){
+      out.push({
+        trial_id: `${baseId}_C2`,
+        source_row_id: baseId,
+        condition: "C2",
+        prime_text: relatedPhonologicalPrime,
+        target_word: wordTarget,
+        correct_response: "word",
+        phase: "main",
+      });
+    }
+
+    // B1: unrelated_prime + word_target
+    if(unrelatedPrime){
+      out.push({
+        trial_id: `${baseId}_B1`,
+        source_row_id: baseId,
+        condition: "B1",
+        prime_text: unrelatedPrime,
+        target_word: wordTarget,
+        correct_response: "word",
+        phase: "main",
+      });
+    }
+
+    // F1: related_semantic_prime + word_target
+    if(relatedSemanticPrime){
+      out.push({
+        trial_id: `${baseId}_F1`,
+        source_row_id: baseId,
+        condition: "F1",
+        prime_text: relatedSemanticPrime,
+        target_word: wordTarget,
+        correct_response: "word",
+        phase: "main",
+      });
+    }
+
+    // F2: nonword_target + word_target
+    if(nonwordTarget){
+      out.push({
+        trial_id: `${baseId}_F2`,
+        source_row_id: baseId,
+        condition: "F2",
+        prime_text: nonwordTarget,
+        target_word: wordTarget,
+        correct_response: "word",
+        phase: "main",
+      });
+    }
+  }
+  return out;
+}
+
+function parsePracticeTrials(csvText){
+  const { headers, rows } = parseCSVRows(csvText);
+  const idIdx = findColumn(headers, ["#", "trial", "trial_id"]);
+  const primeIdx = findColumn(headers, ["prime"]);
+  const targetIdx = findColumn(headers, ["target"]);
+  const relationIdx = findColumn(headers, ["prime_type", "relation"]);
+  const targetTypeIdx = findColumn(headers, ["target_type"]);
+
+  if(primeIdx === -1 || targetIdx === -1 || targetTypeIdx === -1) return [];
+
+  const out = [];
+  for(let i = 0; i < rows.length; i++){
+    const cells = rows[i];
+    const rawTargetType = (cells[targetTypeIdx] || "").trim().toLowerCase();
+    const correctResponse = rawTargetType === "word" ? "word" : "nonword";
+    out.push({
+      trial_id: idIdx !== -1 ? (cells[idIdx] || String(i+1)) : String(i+1),
+      prime_type: "word",
+      prime_text: cells[primeIdx] || "",
+      target_word: cells[targetIdx] || "",
+      correct_response: correctResponse,
+      trial_type: relationIdx !== -1 ? (cells[relationIdx] || "practice") : "practice",
+      target_label: rawTargetType || "practice",
+      phase: "practice",
+    });
+  }
+
+  return out.filter(t => t.prime_text && t.target_word);
+}
+
+async function loadAllTrials(){
+  try {
+    const [mainResp, practiceResp] = await Promise.all([
+      fetch(CONFIG.trialsUrl),
+      fetch(CONFIG.practiceUrl),
+    ]);
+
+    if(!mainResp.ok) throw new Error(`Failed to load trials2.csv (${mainResp.status})`);
+    if(!practiceResp.ok) throw new Error(`Failed to load priming_practice.csv (${practiceResp.status})`);
+
+    MAIN_TRIALS = parseMainTrials(await mainResp.text());
+    PRACTICE_TRIALS = parsePracticeTrials(await practiceResp.text());
+
+    if(MAIN_TRIALS.length === 0) throw new Error("No valid main trials parsed from trials2.csv");
+    if(PRACTICE_TRIALS.length === 0) throw new Error("No valid practice trials parsed from priming_practice.csv");
+
+    return true;
+  } catch (err) {
+    console.error(err);
+    alert("Could not load experiment files. Check console for details.");
+    return false;
+  }
+}
+
+function clearFeedback(){
+  feedbackEl.textContent = "";
+  feedbackEl.className = "hidden";
+}
+
+function showFeedback(isCorrect){
+  feedbackEl.textContent = isCorrect ? "Correct!" : "Incorrect!";
+  feedbackEl.className = isCorrect ? "feedback-correct" : "feedback-incorrect";
+}
+
+function updateProgress(){
+  const total = State.activeTrials.length;
+  const done = State.trialIndex;
+  progressBar.style.width = `${Math.round((done/total)*100)}%`;
+  const label = State.phase === "practice" ? "Practice Trial" : "Trial";
+  trialTitle.textContent = `${label} ${Math.min(done+1,total)} of ${total}`;
+}
+
+function startPractice(){
+  State.phase = "practice";
+  State.activeTrials = shuffle([...PRACTICE_TRIALS]);
+  State.trialIndex = 0;
+  hide("screen-practice-done");
+  show("screen-trials");
+  loadTrial();
+}
+
+function startMain(){
+  State.phase = "main";
+  State.activeTrials = shuffle([...MAIN_TRIALS]);
+  State.trialIndex = 0;
+  hide("screen-practice-done");
+  show("screen-trials");
+  loadTrial();
+}
+
+function loadTrial(){
+  const trial = currentTrial();
+  if(!trial){
+    if(State.phase === "practice"){
+      hide("screen-trials");
+      show("screen-practice-done");
+      return;
+    }
+    finishStudy();
+    return;
+  }
+
+  const token = ++State.trialRenderToken;
+  State.awaitingChoice = false;
+  State.targetOnsetTs = null;
+
+  updateProgress();
+  clearFeedback();
+  responseChoices.classList.add("hidden");
+
+  runTrialSequence(trial, token);
+}
+
+async function runTrialSequence(trial, token){
+  primeDisplay.textContent = "+";
+  await sleep(CONFIG.fixationMs);
+  if(token !== State.trialRenderToken) return;
+
+  primeDisplay.textContent = trial.prime_text;
+  await sleep(CONFIG.wordPrimeDisplayMs);
+  if(token !== State.trialRenderToken) return;
+
+  primeDisplay.textContent = "";
+  await sleep(CONFIG.preTargetGapMs);
+  if(token !== State.trialRenderToken) return;
+
+  primeDisplay.textContent = trial.target_word;
+  State.targetOnsetTs = nowMs();
+  await sleep(CONFIG.targetReadyDelayMs);
+  if(token !== State.trialRenderToken) return;
+
+  responseChoices.classList.remove("hidden");
+  State.awaitingChoice = true;
+}
+
+async function recordChoice(side){
+  if(!State.awaitingChoice) return;
+  State.awaitingChoice = false;
+
+  const trial = currentTrial();
+  const response = side === "left" ? "word" : "nonword";
+  const isCorrect = response === trial.correct_response;
+  const rtMs = Math.round(nowMs() - (State.targetOnsetTs ?? nowMs()));
+
+  sendToGoogleSheet({
+    participant_id: State.participantId,
+    block: State.phase === "practice" ? "Practice" : "Trials",
+    trial_index: State.trialIndex + 1,
+    trial_id: trial.trial_id,
+    source_row_id: trial.source_row_id || "",
+    condition: trial.condition || "",
+    prime_text: trial.prime_text,
+    target_word: trial.target_word,
+    correct_response: trial.correct_response,
+    choice: response,
+    is_correct: isCorrect ? "yes" : "no",
+    reaction_time_ms: rtMs,
+    timestamp_iso: new Date().toISOString(),
+  });
+
+  if(State.phase === "practice"){
+    showFeedback(isCorrect);
+    await sleep(CONFIG.feedbackMs);
+  }
+
+  primeDisplay.textContent = "";
+  responseChoices.classList.add("hidden");
+  clearFeedback();
+
+  State.trialIndex += 1;
+  loadTrial();
+}
+
+document.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+
+  if(State.awaitingAutismResponse && !document.getElementById("screen-autism-question").classList.contains("hidden")){
+    if(k === "y") recordAutismResponse("yes");
+    if(k === "n") recordAutismResponse("no");
+    return;
+  }
+
+  if(screenTrials.classList.contains("hidden")) return;
+  if(!State.awaitingChoice) return;
+  if(k === "f") recordChoice("left");
+  if(k === "j") recordChoice("right");
+});
+
+function recordAutismResponse(response){
+  if(!State.awaitingAutismResponse) return;
+  State.awaitingAutismResponse = false;
+
+  hide("screen-autism-question");
+  show("screen-finish");
+
+  sendToGoogleSheet({
+    participant_id: State.participantId,
+    block: "AutismQuestion",
+    autism_identity: response,
+    timestamp_iso: new Date().toISOString(),
+  });
+}
+
+function finishStudy(){
+  hide("screen-trials");
+  show("screen-autism-question");
+  State.awaitingAutismResponse = true;
+}
+
+document.getElementById("splashBtn").onclick = async () => {
+  const btn = document.getElementById("splashBtn");
+  btn.disabled = true;
+  btn.textContent = "Loading trials...";
+
+  State.participantId = generateParticipantId();
+  const ok = await loadAllTrials();
+
+  btn.disabled = false;
+  btn.textContent = "Continue";
+  if(!ok) return;
+
+  hide("screen-splash");
+  show("screen-instructions");
+};
+
+document.getElementById("instructionsNextBtn").onclick = () => {
+  hide("screen-instructions");
+  startPractice();
+};
+
+document.getElementById("startMainBtn").onclick = () => {
+  startMain();
+};
+</script>
+
+</body>
+</html>

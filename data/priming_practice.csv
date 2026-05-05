@@ -1,0 +1,10 @@
+prime,target,prime_type,target_type
+dog,pet,related,word
+cat,kitten,related,word
+book,read,related,word
+music,song,related,word
+xlfk,flove,unrelated,nonword
+prong,blink,unrelated,word
+table,desk,related,word
+chair,sit,related,word
+random,zumpt,unrelated,nonword
