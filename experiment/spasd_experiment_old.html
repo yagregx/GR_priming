@@ -128,11 +128,11 @@
 </div>
 
 <script>
-const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwB7JHcRqPCWlvWED6iUcoL1fK0CMjdKyzIvVa5SULdZV0e1ASxwVoASvO2Se9frwtMOQ/exec";
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzMpqFif7sobrk1C3RnfS0FmxvGXvLTX3-qq9e1IH7SBJSkNDGctH1WPVkNTklfKsl9pA/exec";
 
 const CONFIG = {
-  trialsUrl: "data/trials.csv",
-  practiceUrl: "priming_practice.csv",
+  trialsUrl: "../data/trials.csv",
+  practiceUrl: "../data/priming_practice.csv",
   fixationMs: 600,
   wordPrimeDisplayMs: 629,
   preTargetGapMs: 400,
@@ -221,7 +221,7 @@ function parseMainTrials(csvText){
     const relatedPhonologicalPrime = cells[relPhonologicalIdx] || "";
     const unrelatedPrime = cells[unrelIdx] || "";
 
-    if(!wordTarget || !nonwordTarget) continue;
+    if(!wordTarget) continue;
 
     // C1: related_semantic_prime + word_target
     if(relatedSemanticPrime){
@@ -262,41 +262,28 @@ function parseMainTrials(csvText){
       });
     }
 
-    // F1: related_semantic_prime + nonword_target
+    // F1: related_semantic_prime + word_target
     if(relatedSemanticPrime){
       out.push({
         trial_id: `${baseId}_F1`,
         source_row_id: baseId,
         condition: "F1",
         prime_text: relatedSemanticPrime,
-        target_word: nonwordTarget,
-        correct_response: "nonword",
+        target_word: wordTarget,
+        correct_response: "word",
         phase: "main",
       });
     }
 
-    // F2: related_phonological_prime + nonword_target
-    if(relatedPhonologicalPrime){
+    // F2: nonword_target + word_target
+    if(nonwordTarget){
       out.push({
         trial_id: `${baseId}_F2`,
         source_row_id: baseId,
         condition: "F2",
-        prime_text: relatedPhonologicalPrime,
-        target_word: nonwordTarget,
-        correct_response: "nonword",
-        phase: "main",
-      });
-    }
-
-    // F3: unrelated_prime + nonword_target
-    if(unrelatedPrime){
-      out.push({
-        trial_id: `${baseId}_F3`,
-        source_row_id: baseId,
-        condition: "F3",
-        prime_text: unrelatedPrime,
-        target_word: nonwordTarget,
-        correct_response: "nonword",
+        prime_text: nonwordTarget,
+        target_word: wordTarget,
+        correct_response: "word",
         phase: "main",
       });
     }
